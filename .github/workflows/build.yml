@@ -17,6 +17,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: Linux
@@ -69,7 +70,6 @@ jobs:
       run: |
         Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-win64.exe" -OutFile ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-win64.exe
         Start-Process -FilePath "${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-win64.exe" -ArgumentList "/S" -Wait
-        Move-Item -Path "C:\Program Files\LLVM\*" -Destination ${{ github.workspace }}/third_party -Force
 
     - name: Configure CMake
       run: |
