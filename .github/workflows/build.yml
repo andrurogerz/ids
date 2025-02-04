@@ -18,7 +18,14 @@ jobs:
 
     strategy:
       matrix:
-        runner: [ubuntu-latest, windows-latest]
+        include:
+          - name: Linux
+            runner: ubuntu-latest
+            line_continue: '\'
+
+          - name: Windows
+            runner: windows-latest
+            line_continue: '`'
 
     steps:
     - uses: actions/checkout@v4
@@ -41,16 +48,16 @@ jobs:
 
     - name: Configure LLVM
       run: >
-        cmake -B ${{ github.workspace }}/build/llvm-project                     \
-              -D CMAKE_BUILD_TYPE=Release                                       \
-              -D CMAKE_C_COMPILER_LAUNCHER=sccache                              \
-              -D CMAKE_CXX_COMPILER_LAUNCHER=sccache                            \
+        cmake -B ${{ github.workspace }}/build/llvm-project                     ${{ matrix.line_continue }}
+              -D CMAKE_BUILD_TYPE=Release                                       ${{ matrix.line_continue }}
+              -D CMAKE_C_COMPILER_LAUNCHER=sccache                              ${{ matrix.line_continue }}
+              -D CMAKE_CXX_COMPILER_LAUNCHER=sccache                            ${{ matrix.line_continue }}
               -S ${{ github.workspace }}/third_party/llvm-project/llvm
 
     - name: Build LLVM
       run: >
-        cmake --build ${{ github.workspace }}/build/llvm-project                \
-              --config Release                                                  \
+        cmake --build ${{ github.workspace }}/build/llvm-project                ${{ matrix.line_continue }}
+              --config Release                                                  ${{ matrix.line_continue }}
               --target FileCheck
 
     - if: runner.os == 'Linux'
@@ -66,22 +73,22 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -B ${{ github.workspace }}/build                                  \
-              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                         \
-              -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang \
-              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++ \
-              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld                            \
-              -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm    \
-              -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang  \
-              -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck \
+        cmake -B ${{ github.workspace }}/build                                  ${{ matrix.line_continue }}
+              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                         ${{ matrix.line_continue }}
+              -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang ${{ matrix.line_continue }}
+              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++ ${{ matrix.line_continue }}
+              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld                            ${{ matrix.line_continue }}
+              -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm    ${{ matrix.line_continue }}
+              -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang  ${{ matrix.line_continue }}
+              -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck ${{ matrix.line_continue }}
               -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py
 
     - name: Build
       run: >
-        cmake --build ${{ github.workspace }}/build                             \
+        cmake --build ${{ github.workspace }}/build                             ${{ matrix.line_continue }}
               --config ${{ env.BUILD_TYPE }}
 
     - name: Test
       run: >
-        cmake --build ${{github.workspace}}/build                               \
+        cmake --build ${{github.workspace}}/build                               ${{ matrix.line_continue }}
               --target check-ids
