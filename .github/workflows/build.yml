@@ -75,7 +75,7 @@ jobs:
       with:
         command: x
         cwd: ${{ github.workspace }}/third_party
-        files: ${{ github.workspace }}/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar.xz
+        files: ${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar.xz
 
     - name: Configure CMake
       run: |
