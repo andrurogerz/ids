@@ -68,8 +68,14 @@ jobs:
 
     - if: runner.os == 'Windows'
       run: |
-        Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-win64.exe" -OutFile ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-win64.exe
-        Start-Process -FilePath "${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-win64.exe" -ArgumentList "/S" -Wait
+        Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar.xz" -OutFile "${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar.xz"
+
+    - if: runner.os == 'Windows'
+      uses: a7ul/tar-action@v1.2.0
+      with:
+        command: x
+        cwd: ${{ github.workspace }}/third_party
+        files: clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar.xz
 
     - name: Configure CMake
       run: |
