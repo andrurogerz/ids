@@ -14,8 +14,11 @@ env:
 
 jobs:
   build:
-    # TODO(compnerd) convert this to a build matrix
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, windows-latest]
 
     steps:
     - uses: actions/checkout@v4
@@ -50,9 +53,16 @@ jobs:
               --config Release                                                  \
               --target FileCheck
 
-    - run: |
-        curl -sL https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -o ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz 
+    - if: runner.os == 'Linux'
+      run: |
+        curl -sL https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -o ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz
         tar Jxf ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -C ${{ github.workspace }}/third_party --strip-components 1
+
+    - if: runner.os == 'Windows'
+      run: |
+        Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-win64.exe" -OutFile ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-win64.exe
+        Start-Process -FilePath "${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-win64.exe" -ArgumentList "/S" -Wait
+        Move-Item -Path "C:\Program Files\LLVM\*" -Destination ${{ github.workspace }}/third_party -Force
 
     - name: Configure CMake
       run: |
