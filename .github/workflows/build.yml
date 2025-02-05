@@ -73,6 +73,9 @@ jobs:
         7z x "${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar" -o"${{ github.workspace }}/third_party"
         Move-Item -Path "${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc/*" -Destination "${{ github.workspace }}/third_party" -Force
 
+    - if: runner.os == 'Windows'
+      uses: compnerd/gha-setup-vsdevenv@v6
+
     - name: Configure CMake
       run: |
         cmake -B ${{ github.workspace }}/build                                  ${{ matrix.line_continue }}
