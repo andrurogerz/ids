@@ -75,6 +75,8 @@ jobs:
 
     - if: runner.os == 'Windows'
       uses: compnerd/gha-setup-vsdevenv@v6
+      with:
+        components: "Microsoft.VisualStudio.Component.VC.Tools.x86.x64;Microsoft.VisualStudio.Workload.NativeDesktop"
 
     - name: Configure CMake
       run: |
