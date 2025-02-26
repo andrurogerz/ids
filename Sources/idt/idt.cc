@@ -131,6 +131,13 @@ public:
         return true;
     }
 
+    // Check if the function already has the requested export macro.
+    for (auto *attr : FD->attrs()) {
+      if (auto *annotation = llvm::dyn_cast<clang::AnnotateAttr>(attr))
+        if (annotation->getAnnotation() == export_macro)
+          return true;
+    }
+
     // If the function has a dll-interface, it is properly annotated.
     // TODO(compnerd) this should also handle `__visibility__`
     if (FD->hasAttr<clang::DLLExportAttr>() ||
