@@ -140,21 +140,13 @@ public:
     if (CD->isAnonymousStructOrUnion())
       return true;
 
-    // Skip template records.
-    if (CD->getDescribedClassTemplate())
-      return true;
-
-    // Skip records that are already exported.
-    if (has_export_attribute(CD))
-      return true;
-
     // Save/restore the current value of export_record_decl_ to support nested
     // record definitions.
     const bool prev_export_record_decl = export_record_decl_;
 
     export_record_decl_ = false;
     RecursiveASTVisitor::TraverseCXXRecordDecl(CD);
-    if (export_record_decl_) {
+    if (export_record_decl_ && !has_export_attribute(CD)) {
       // While visiting one of the child nodes, we determined this class should
       // be annotated for export.
 
@@ -173,7 +165,6 @@ public:
             token.is(clang::tok::kw_union))
           break;
       }
-
 
       const clang::SourceLocation location = context_.getFullLoc(loc).getExpansionLoc();
       unexported_public_interface(location)
