@@ -43,6 +43,11 @@ inplace("inplace", llvm::cl::init(false),
         llvm::cl::desc("Apply suggested changes in-place"),
         llvm::cl::cat(idt::category));
 
+llvm::cl::opt<bool>
+export_classes("export-classes", llvm::cl::init(false),
+               llvm::cl::desc("Add export annotation to classes"),
+               llvm::cl::cat(idt::category));
+
 llvm::cl::list<std::string>
 ignored_symbols("ignore",
                 llvm::cl::desc("Ignore one or more functions"),
@@ -69,6 +74,7 @@ namespace idt {
 class visitor : public clang::RecursiveASTVisitor<visitor> {
   clang::ASTContext &context_;
   clang::SourceManager &source_manager_;
+  bool export_record_decl_;
 
   clang::DiagnosticBuilder
   unexported_public_interface(clang::SourceLocation location) {
@@ -110,11 +116,81 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
     return false;
   }
 
+  template <typename Decl_>
+  bool has_export_attribute(const Decl_ *D) const {
+    return D->hasAttr<clang::DLLExportAttr>() || D->hasAttr<clang::DLLImportAttr>();
+  }
+
+  template <typename Decl_>
+  bool should_export_containing_record(const Decl_ *D) const {
+    return export_classes && D->isCXXClassMember();
+  }
+
 public:
   explicit visitor(clang::ASTContext &context)
-      : context_(context), source_manager_(context.getSourceManager()) {}
+      : context_(context), source_manager_(context.getSourceManager()),
+        export_record_decl_(false) {}
+
+  bool TraverseCXXRecordDecl(clang::CXXRecordDecl *CD) {
+    // Skip declarations.
+    if (!CD->isThisDeclarationADefinition())
+      return true;
+
+    // Skip anonymous record.
+    if (CD->isAnonymousStructOrUnion())
+      return true;
+
+    // Skip template records.
+    if (CD->getDescribedClassTemplate())
+      return true;
+
+    // Skip records that are already exported.
+    if (has_export_attribute(CD))
+      return true;
+
+    // Save/restore the current value of export_record_decl_ to support nested
+    // record definitions.
+    const bool prev_export_record_decl = export_record_decl_;
+
+    export_record_decl_ = false;
+    RecursiveASTVisitor::TraverseCXXRecordDecl(CD);
+    if (export_record_decl_) {
+      // While visiting one of the child nodes, we determined this class should
+      // be annotated for export.
+
+      // Insert the annotation immediately following the class/struct/union
+      // keyword.
+      clang::LangOptions lang_opts = CD->getASTContext().getLangOpts();
+      clang::SourceLocation loc = CD->getBeginLoc();
+      while (loc.isValid()) {
+        clang::Token token;
+        if (clang::Lexer::getRawToken(loc, token, source_manager_, lang_opts))
+          break;
+
+        loc = token.getEndLoc();
+        if (token.is(clang::tok::kw_class) ||
+            token.is(clang::tok::kw_struct) ||
+            token.is(clang::tok::kw_union))
+          break;
+      }
+
+
+      const clang::SourceLocation location = context_.getFullLoc(loc).getExpansionLoc();
+      unexported_public_interface(location)
+          << CD
+          << clang::FixItHint::CreateInsertion(loc, " " + export_macro);
+    }
+
+    export_record_decl_ = prev_export_record_decl;
+
+    return true;
+  }
 
   bool VisitFunctionDecl(clang::FunctionDecl *FD) {
+    // Skip the containing record is already going to be exported.
+    if (export_record_decl_)
+      return true;
+
     clang::FullSourceLoc location = get_location(FD);
 
     // Ignore declarations from the system.
@@ -154,8 +230,7 @@ public:
 
     // If the function has a dll-interface, it is properly annotated.
     // TODO(compnerd) this should also handle `__visibility__`
-    if (FD->hasAttr<clang::DLLExportAttr>() ||
-        FD->hasAttr<clang::DLLImportAttr>())
+    if (has_export_attribute(FD))
       return true;
 
     // Ignore known forward declarations (builtins)
@@ -164,6 +239,9 @@ public:
 
     // TODO(compnerd) replace with std::set::contains in C++20
     if (contains(get_ignored_symbols(), FD->getNameAsString()))
+      return true;
+
+    if (export_classes && (export_record_decl_ = FD->isCXXClassMember()))
       return true;
 
     clang::SourceLocation insertion_point =
@@ -180,6 +258,10 @@ public:
   // VisitVarDecl will visit all variable declarations as well as static fields
   // in classes and structs. Non-static fields are not visited by this method.
   bool VisitVarDecl(clang::VarDecl *VD) {
+    // Skip the containing record is already going to be exported.
+    if (export_record_decl_)
+      return true;
+
     if (VD->hasAttr<clang::DLLExportAttr>() ||
         VD->hasAttr<clang::DLLImportAttr>())
       return true;
@@ -206,6 +288,9 @@ public:
 
     // TODO(compnerd) replace with std::set::contains in C++20
     if (contains(get_ignored_symbols(), VD->getNameAsString()))
+      return true;
+
+    if (export_classes && (export_record_decl_ = VD->isCXXClassMember()))
       return true;
 
     clang::FullSourceLoc location = get_location(VD);
