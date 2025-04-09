@@ -22,10 +22,12 @@ jobs:
         include:
           - name: Linux
             runner: ubuntu-latest
+            cmake_args: -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
             line_continue: '\'
 
           - name: Windows
             runner: windows-latest
+            cmake_args:
             line_continue: '`'
 
     steps:
@@ -84,11 +86,11 @@ jobs:
               -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                         ${{ matrix.line_continue }}
               -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang ${{ matrix.line_continue }}
               -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++ ${{ matrix.line_continue }}
-              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld                            ${{ matrix.line_continue }}
               -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm    ${{ matrix.line_continue }}
               -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang  ${{ matrix.line_continue }}
               -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck ${{ matrix.line_continue }}
-              -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py
+              -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py ${{ matrix.line_continue }}
+              ${{ matrix.cmake_args }}
 
     - name: Build
       run: >
