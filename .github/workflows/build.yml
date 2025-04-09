@@ -76,6 +76,10 @@ jobs:
         Move-Item -Path "${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc/*" -Destination "${{ github.workspace }}/third_party" -Force
 
     - if: runner.os == 'Windows'
+      run: |
+        Get-ChildItem -Recurse "${{ github.workspace }}/third_party" | Format-List
+
+    - if: runner.os == 'Windows'
       uses: compnerd/gha-setup-vsdevenv@v6
       with:
         components: "Microsoft.VisualStudio.Component.VC.Tools.x86.x64;Microsoft.VisualStudio.Workload.NativeDesktop"
