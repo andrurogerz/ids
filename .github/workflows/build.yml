@@ -52,6 +52,7 @@ jobs:
     - name: Configure LLVM
       run: >
         cmake -B ${{ github.workspace }}/build/llvm-project                     ${{ matrix.line_continue }}
+              -DLLVM_ENABLE_PROJECTS="llvm;clang"                               ${{ matrix.line_continue }}
               -D CMAKE_BUILD_TYPE=Release                                       ${{ matrix.line_continue }}
               -D CMAKE_C_COMPILER_LAUNCHER=sccache                              ${{ matrix.line_continue }}
               -D CMAKE_CXX_COMPILER_LAUNCHER=sccache                            ${{ matrix.line_continue }}
@@ -60,24 +61,7 @@ jobs:
     - name: Build LLVM
       run: >
         cmake --build ${{ github.workspace }}/build/llvm-project                ${{ matrix.line_continue }}
-              --config Release                                                  ${{ matrix.line_continue }}
-              --target FileCheck
-
-    - if: runner.os == 'Linux'
-      run: |
-        curl -sL https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -o ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz
-        tar Jxf ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -C ${{ github.workspace }}/third_party --strip-components 1
-
-    - if: runner.os == 'Windows'
-      run: |
-        Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar.xz" -OutFile "${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar.xz"
-        7z x "${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar.xz" -o"${{ github.workspace }}/third_party"
-        7z x "${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc.tar" -o"${{ github.workspace }}/third_party"
-        Move-Item -Path "${{ github.workspace }}/third_party/clang+llvm-${{ env.LLVM_VERSION }}-x86_64-pc-windows-msvc/*" -Destination "${{ github.workspace }}/third_party" -Force
-
-    - if: runner.os == 'Windows'
-      run: |
-        Get-ChildItem -Recurse "${{ github.workspace }}/third_party" | Format-List
+              --config Release
 
     - if: runner.os == 'Windows'
       uses: compnerd/gha-setup-vsdevenv@v6
@@ -86,14 +70,14 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -B ${{ github.workspace }}/build                                  ${{ matrix.line_continue }}
-              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                         ${{ matrix.line_continue }}
-              -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang ${{ matrix.line_continue }}
-              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++ ${{ matrix.line_continue }}
-              -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm    ${{ matrix.line_continue }}
-              -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang  ${{ matrix.line_continue }}
-              -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck ${{ matrix.line_continue }}
-              -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py ${{ matrix.line_continue }}
+        cmake -B ${{ github.workspace }}/build                                                          ${{ matrix.line_continue }}
+              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                                                 ${{ matrix.line_continue }}
+              -D CMAKE_C_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang                  ${{ matrix.line_continue }}
+              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang++              ${{ matrix.line_continue }}
+              -D LLVM_DIR=${{ github.workspace }}/build/llvm-project/lib/cmake/llvm                     ${{ matrix.line_continue }}
+              -D Clang_DIR=${{ github.workspace }}/build/llvm-project/lib/cmake/clang                   ${{ matrix.line_continue }}
+              -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck          ${{ matrix.line_continue }}
+              -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py  ${{ matrix.line_continue }}
               ${{ matrix.cmake_args }}
 
     - name: Build
