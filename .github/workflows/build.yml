@@ -45,18 +45,18 @@ jobs:
 
     - uses: hendrikmuhs/ccache-action@4cb35b2ff44ce57e1f5f5221e26bd8fefcfe41d0 # main as of 2024-01-21
       with:
-        max-size: 10M
         key: ${{ runner.os }}-${{ env.llvm_revision }}
         variant: sccache
 
     - name: Configure LLVM
       run: >
         cmake -B ${{ github.workspace }}/build/llvm-project                     ${{ matrix.line_continue }}
-              -DLLVM_ENABLE_PROJECTS="llvm;clang"                               ${{ matrix.line_continue }}
+              -D LLVM_ENABLE_PROJECTS="llvm;clang"                              ${{ matrix.line_continue }}
               -D CMAKE_BUILD_TYPE=Release                                       ${{ matrix.line_continue }}
               -D CMAKE_C_COMPILER_LAUNCHER=sccache                              ${{ matrix.line_continue }}
               -D CMAKE_CXX_COMPILER_LAUNCHER=sccache                            ${{ matrix.line_continue }}
-              -S ${{ github.workspace }}/third_party/llvm-project/llvm
+              -S ${{ github.workspace }}/third_party/llvm-project/llvm          ${{ matrix.line_continue }}
+              -G Ninja
 
     - name: Build LLVM
       run: >
@@ -68,7 +68,7 @@ jobs:
       with:
         components: "Microsoft.VisualStudio.Component.VC.Tools.x86.x64;Microsoft.VisualStudio.Workload.NativeDesktop"
 
-    - name: Configure CMake
+    - name: Configure IDS
       run: |
         cmake -B ${{ github.workspace }}/build                                                          ${{ matrix.line_continue }}
               -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                                                 ${{ matrix.line_continue }}
@@ -80,7 +80,7 @@ jobs:
               -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py  ${{ matrix.line_continue }}
               ${{ matrix.cmake_args }}
 
-    - name: Build
+    - name: Build IDS
       run: >
         cmake --build ${{ github.workspace }}/build                             ${{ matrix.line_continue }}
               --config ${{ env.BUILD_TYPE }}
