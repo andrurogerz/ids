@@ -18,9 +18,11 @@ jobs:
     runs-on: ${{ matrix.runner_os }}
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner_os: ubuntu-latest
+            llvm_cmake_args:
             llvm_build_targets: FileCheck
             ids_cmake_args: >
               -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang
@@ -28,6 +30,9 @@ jobs:
               -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
 
           - runner_os: windows-latest
+            llvm_cmake_args: >
+              -D LLVM_ENABLE_PROJECTS="lld;clang"
+              -D LLVM_TARGETS_TO_BUILD="host"
             llvm_build_targets: all
             ids_cmake_args: >
               -D CMAKE_C_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang.exe
@@ -60,13 +65,12 @@ jobs:
     - name: Configure LLVM
       run: >
         cmake -B ${{ github.workspace }}/build/llvm-project
-              -D LLVM_ENABLE_PROJECTS="lld;clang"
-              -D LLVM_TARGETS_TO_BUILD="host"
               -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
               -D CMAKE_C_COMPILER_LAUNCHER=sccache
               -D CMAKE_CXX_COMPILER_LAUNCHER=sccache
               -S ${{ github.workspace }}/third_party/llvm-project/llvm
               -G Ninja
+              ${{ matrix.llvm_cmake_args }}
 
     - name: Build LLVM
       run: >
