@@ -13,9 +13,25 @@ env:
   SCCACHE_DIRECT: yes
 
 jobs:
-  build-ubuntu:
+  build:
     # TODO(compnerd) convert this to a build matrix
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner_os }}
+
+    strategy:
+      matrix:
+        include:
+          - runner_os: ubuntu-latest
+            llvm_build_targets: FileCheck
+            ids_cmake_args: >
+              -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang
+              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++
+              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
+
+          - runner_os: windows-latest
+            llvm_build_targets: all
+            ids_cmake_args: >
+              -D CMAKE_C_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang.exe
+              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang++.exe
 
     steps:
     - uses: actions/checkout@v4
@@ -35,35 +51,43 @@ jobs:
         key: ${{ runner.os }}-${{ env.llvm_revision }}
         variant: sccache
 
+    - name: Setup VSDevEnv
+      if: runner.os == 'Windows'
+      uses: compnerd/gha-setup-vsdevenv@v6
+      with:
+        components: "Microsoft.VisualStudio.Component.VC.Tools.x86.x64;Microsoft.VisualStudio.Workload.NativeDesktop"
+
     - name: Configure LLVM
       run: >
-        cmake -B ${{ github.workspace }}/build/llvm-project                     \
-              -D CMAKE_BUILD_TYPE=Release                                       \
-              -D CMAKE_C_COMPILER_LAUNCHER=sccache                              \
-              -D CMAKE_CXX_COMPILER_LAUNCHER=sccache                            \
+        cmake -B ${{ github.workspace }}/build/llvm-project
+              -D LLVM_ENABLE_PROJECTS="lld;clang"
+              -D LLVM_TARGETS_TO_BUILD="host"
+              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+              -D CMAKE_C_COMPILER_LAUNCHER=sccache
+              -D CMAKE_CXX_COMPILER_LAUNCHER=sccache
               -S ${{ github.workspace }}/third_party/llvm-project/llvm
+              -G Ninja
 
     - name: Build LLVM
       run: >
-        cmake --build ${{ github.workspace }}/build/llvm-project                \
-              --config Release                                                  \
-              --target FileCheck
+        cmake --build ${{ github.workspace }}/build/llvm-project
+              --config Release
+              --target ${{ matrix.llvm_build_targets }}
 
-    - run: |
-        curl -sL https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -o ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz 
+    - if: runner.os == 'Linux'
+      run: |
+        curl -sL https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -o ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz
         tar Jxf ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -C ${{ github.workspace }}/third_party --strip-components 1
 
-    - name: Configure CMake
-      run: |
-        cmake -B ${{ github.workspace }}/build                                  \
-              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                         \
-              -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang \
-              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++ \
-              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld                            \
-              -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm    \
-              -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang  \
-              -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck \
+    - name: Configure IDS
+      run: >
+        cmake -B ${{ github.workspace }}/build
+              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+              -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm
+              -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang
+              -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck
               -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py
+              ${{ matrix.ids_cmake_args }}
 
     - name: Build
       run: >
@@ -73,73 +97,4 @@ jobs:
     - name: Test
       run: >
         cmake --build ${{github.workspace}}/build                               \
-              --target check-ids
-
-  build-windows:
-    runs-on: windows-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Checkout LLVM
-      uses: actions/checkout@v4
-      with:
-        repository: llvm/llvm-project
-        ref: llvmorg-${{ env.LLVM_VERSION }}
-        path: third_party/llvm-project
-        fetch-depth: 1
-
-    - id: llvm-revision
-      run: |
-        $llvm_revision = git -C ${{ github.workspace }}/third_party/llvm-project rev-parse HEAD
-        echo "llvm_revision=$llvm_revision" >> $env:GITHUB_ENV
-
-    - uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.17 release (2025-02-03)
-      with:
-        key: ${{ runner.os }}-${{ env.llvm_revision }}
-        variant: sccache
-
-    - name: Setup VSDevEnv
-      if: runner.os == 'Windows'
-      uses: compnerd/gha-setup-vsdevenv@v6
-      with:
-        components: "Microsoft.VisualStudio.Component.VC.Tools.x86.x64;Microsoft.VisualStudio.Workload.NativeDesktop"
-
-    - name: Configure LLVM
-      run: |
-        cmake -B ${{ github.workspace }}/build/llvm-project                     `
-              -D LLVM_ENABLE_PROJECTS="lld;clang"                               `
-              -D LLVM_TARGETS_TO_BUILD="host"                                   `
-              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                         `
-              -D CMAKE_C_COMPILER_LAUNCHER=sccache                              `
-              -D CMAKE_CXX_COMPILER_LAUNCHER=sccache                            `
-              -S ${{ github.workspace }}/third_party/llvm-project/llvm          `
-              -G Ninja
-
-    - name: Build LLVM
-      run: |
-        cmake --build ${{ github.workspace }}/build/llvm-project                `
-              --config ${{ env.BUILD_TYPE }}
-
-    - name: Configure IDS
-      run: |
-        cmake -B ${{ github.workspace }}/build                                                          `
-              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                                                 `
-              -D CMAKE_C_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang.exe              `
-              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang++.exe          `
-              -D LLVM_DIR=${{ github.workspace }}/build/llvm-project/lib/cmake/llvm                     `
-              -D Clang_DIR=${{ github.workspace }}/build/llvm-project/lib/cmake/clang                   `
-              -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck          `
-              -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py  `
-              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld                                                    `
-              -G Ninja
-
-    - name: Build IDS
-      run: |
-        cmake --build ${{ github.workspace }}/build                             `
-              --config ${{ env.BUILD_TYPE }}
-
-    - name: Test IDS
-      run: |
-        cmake --build ${{github.workspace}}/build                               `
               --target check-ids
