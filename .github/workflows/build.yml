@@ -31,7 +31,7 @@ jobs:
 
           - runner_os: windows-latest
             llvm_cmake_args: >
-              -D LLVM_ENABLE_PROJECTS="lld;clang"
+              -D LLVM_ENABLE_PROJECTS="clang"
               -D LLVM_TARGETS_TO_BUILD="host"
             llvm_build_targets: all
             ids_cmake_args: >
@@ -65,18 +65,18 @@ jobs:
     - name: Configure LLVM
       run: >
         cmake -B ${{ github.workspace }}/build/llvm-project
-              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-              -D CMAKE_C_COMPILER_LAUNCHER=sccache
-              -D CMAKE_CXX_COMPILER_LAUNCHER=sccache
-              -S ${{ github.workspace }}/third_party/llvm-project/llvm
-              -G Ninja
-              ${{ matrix.llvm_cmake_args }}
+        -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+        -D CMAKE_C_COMPILER_LAUNCHER=sccache
+        -D CMAKE_CXX_COMPILER_LAUNCHER=sccache
+        -S ${{ github.workspace }}/third_party/llvm-project/llvm
+        -G Ninja
+        ${{ matrix.llvm_cmake_args }}
 
     - name: Build LLVM
       run: >
         cmake --build ${{ github.workspace }}/build/llvm-project
-              --config Release
-              --target ${{ matrix.llvm_build_targets }}
+        --config Release
+        --target ${{ matrix.llvm_build_targets }}
 
     - if: runner.os == 'Linux'
       run: |
@@ -86,19 +86,19 @@ jobs:
     - name: Configure IDS
       run: >
         cmake -B ${{ github.workspace }}/build
-              -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-              -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm
-              -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang
-              -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck
-              -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py
-              ${{ matrix.ids_cmake_args }}
+        -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+        -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm
+        -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang
+        -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck
+        -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py
+        ${{ matrix.ids_cmake_args }}
 
     - name: Build
       run: >
-        cmake --build ${{ github.workspace }}/build                             \
-              --config ${{ env.BUILD_TYPE }}
+        cmake --build ${{ github.workspace }}/build
+        --config ${{ env.BUILD_TYPE }}
 
     - name: Test
       run: >
-        cmake --build ${{github.workspace}}/build                               \
-              --target check-ids
+        cmake --build ${{github.workspace}}/build
+        --target check-ids
