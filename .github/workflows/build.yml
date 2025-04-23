@@ -22,20 +22,12 @@ jobs:
       matrix:
         include:
           - runner_os: ubuntu-latest
-            llvm_cmake_args:
-            llvm_build_targets: FileCheck
-            ids_cmake_args: >
-              -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang
-              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++
-              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
+            exe_file_ext:
+            ids_cmake_args: -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
 
           - runner_os: windows-latest
-            llvm_cmake_args: >
-              -D LLVM_ENABLE_PROJECTS="clang"
-            llvm_build_targets: all
-            ids_cmake_args: >
-              -D CMAKE_C_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang.exe
-              -D CMAKE_CXX_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang++.exe
+            exe_file_ext: .exe
+            ids_cmake_args:
 
     steps:
     - uses: actions/checkout@v4
@@ -73,21 +65,13 @@ jobs:
         -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
         -D CMAKE_C_COMPILER_LAUNCHER=sccache
         -D CMAKE_CXX_COMPILER_LAUNCHER=sccache
+        -D LLVM_ENABLE_PROJECTS="clang"
         -D LLVM_TARGETS_TO_BUILD="host"
         -S ${{ github.workspace }}/third_party/llvm-project/llvm
         -G Ninja
-        ${{ matrix.llvm_cmake_args }}
 
     - name: Build LLVM
-      run: >
-        cmake --build ${{ github.workspace }}/build/llvm-project
-        --config Release
-        --target ${{ matrix.llvm_build_targets }}
-
-    - if: runner.os == 'Linux'
-      run: |
-        curl -sL https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -o ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz
-        tar Jxf ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -C ${{ github.workspace }}/third_party --strip-components 1
+      run: cmake --build ${{ github.workspace }}/build/llvm-project
 
     - name: Configure IDS
       run: >
@@ -97,14 +81,12 @@ jobs:
         -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang
         -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck
         -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py
+        -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang${{ matrix.exe_file_ext }}
+        -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++${{ matrix.exe_file_ext}}
         ${{ matrix.ids_cmake_args }}
 
-    - name: Build
-      run: >
-        cmake --build ${{ github.workspace }}/build
-        --config ${{ env.BUILD_TYPE }}
+    - name: Build IDS
+      run: cmake --build ${{ github.workspace }}/build
 
-    - name: Test
-      run: >
-        cmake --build ${{github.workspace}}/build
-        --target check-ids
+    - name: Test IDS
+      run: cmake --build ${{github.workspace}}/build --target check-ids
