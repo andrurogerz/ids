@@ -32,7 +32,6 @@ jobs:
           - runner_os: windows-latest
             llvm_cmake_args: >
               -D LLVM_ENABLE_PROJECTS="clang"
-              -D LLVM_TARGETS_TO_BUILD="host"
             llvm_build_targets: all
             ids_cmake_args: >
               -D CMAKE_C_COMPILER=${{ github.workspace }}/build/llvm-project/bin/clang.exe
@@ -68,6 +67,7 @@ jobs:
         -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
         -D CMAKE_C_COMPILER_LAUNCHER=sccache
         -D CMAKE_CXX_COMPILER_LAUNCHER=sccache
+        -D LLVM_TARGETS_TO_BUILD="host"
         -S ${{ github.workspace }}/third_party/llvm-project/llvm
         -G Ninja
         ${{ matrix.llvm_cmake_args }}
