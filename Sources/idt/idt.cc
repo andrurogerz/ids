@@ -450,6 +450,8 @@ public:
       : context_(context), source_manager_(context.getSourceManager()),
         file_includes_(file_includes) {}
 
+  bool shouldVisitTemplateInstantiations() const { return true; }
+
   bool TraverseCXXRecordDecl(clang::CXXRecordDecl *RD) {
     export_record_if_needed(RD);
 
@@ -466,10 +468,12 @@ public:
   bool TraverseClassTemplateSpecializationDecl(
       clang::ClassTemplateSpecializationDecl *SD) {
     switch (SD->getSpecializationKind()) {
+
     case clang::TSK_ExplicitSpecialization:
       // This call visits class template specialization record and recursively
       // visits all of it children, which may also require export.
-      return TraverseCXXRecordDecl(SD);
+      return TraverseCXXRecordDecl(SD) &&
+        RecursiveASTVisitor::TraverseClassTemplateSpecializationDecl(SD);
 
     // TODO: consider annotating explicit template instantiation declarations
     // and definitions in the future. They may require unique annotation macros
@@ -479,7 +483,7 @@ public:
     case clang::TSK_ExplicitInstantiationDefinition:
       [[fallthrough]];
     default:
-      return true;
+      return RecursiveASTVisitor::TraverseClassTemplateSpecializationDecl(SD);
     }
   }
 
