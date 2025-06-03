@@ -9,7 +9,7 @@ on:
 
 env:
   BUILD_TYPE: Release
-  LLVM_VERSION: 19.1.4
+  LLVM_VERSION: 20.1.6
   SCCACHE_DIRECT: yes
 
 jobs:
@@ -50,7 +50,7 @@ jobs:
               --target FileCheck
 
     - run: |
-        curl -sL https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -o ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz 
+        curl -sL https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -o ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz
         tar Jxf ${{ github.workspace }}/third_party/LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz -C ${{ github.workspace }}/third_party --strip-components 1
 
     - name: Configure CMake
