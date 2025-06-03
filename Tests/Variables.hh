@@ -44,10 +44,16 @@ private:
 };
 
 extern int extern_variable;
-// CHECK: Variables.hh:[[@LINE-1]]:1: remark: unexported public interface 'extern_variable'
+// CHECK: Variables.hh:[[@LINE-1]]:8: remark: unexported public interface 'extern_variable'
 
 extern const int extern_const_variable;
-// CHECK: Variables.hh:[[@LINE-1]]:1: remark: unexported public interface 'extern_const_variable'
+// CHECK: Variables.hh:[[@LINE-1]]:8: remark: unexported public interface 'extern_const_variable'
+
+extern __attribute__((deprecated("do not use"))) int extern_annotated_variable;
+// CHECK: Variables.hh:[[@LINE-1]]:50: remark: unexported public interface 'extern_annotated_variable'
+
+extern __attribute__((deprecated("do not use"))) const int extern_annotated_const_variable;
+// CHECK: Variables.hh:[[@LINE-1]]:50: remark: unexported public interface 'extern_annotated_const_variable'
 
 extern int ignored_extern_variable;
 // CHECK-NOT: Variables.hh:[[@LINE-1]]:{{.*}}
@@ -57,7 +63,7 @@ int global_variable;
 
 void function() {
   extern int extern_local_variable;
-  // CHECK: Variables.hh:[[@LINE-1]]:3: remark: unexported public interface 'extern_local_variable'
+  // CHECK: Variables.hh:[[@LINE-1]]:10: remark: unexported public interface 'extern_local_variable'
 
   int local_variable;
   // CHECK-NOT: Variables.hh:[[@LINE-1]]:{{.*}}

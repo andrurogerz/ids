@@ -291,6 +291,39 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
     return false;
   }
 
+  // Find the source location of the start of the token that immediately follows
+  // the declaration's last attribute. Returns the start of the declaration if
+  // it has no attributes.
+  template <typename Decl_>
+  clang::SourceLocation location_after_attributes(const Decl_ *D) const {
+    clang::SourceLocation SLoc = D->getBeginLoc();
+    if (D->attrs().empty())
+      return SLoc;
+
+    // The attribute list is not necessarily in source order, so find the one
+    // that appears last.
+    for (const clang::Attr *A : D->attrs()) {
+      clang::SourceLocation Loc = clang::Lexer::getLocForEndOfToken(
+          A->getRange().getEnd(), 0, source_manager_, context_.getLangOpts());
+      if (source_manager_.isBeforeInTranslationUnit(SLoc, Loc))
+        SLoc = Loc;
+    }
+
+    // Closing ) and ] tokens may appear immediately following the end of the
+    // attribute token. Seek past these, as well as any comment blocks, to find
+    // the next useful token.
+    for (clang::Token Tok;
+        !clang::Lexer::getRawToken(SLoc, Tok, source_manager_, context_.getLangOpts(), true);
+        SLoc = clang::Lexer::getLocForEndOfToken(Tok.getLocation(), 0, source_manager_, context_.getLangOpts())) {
+      if (!Tok.isOneOf(clang::tok::r_paren, clang::tok::r_square, clang::tok::comment)) {
+        SLoc = Tok.getLocation();
+        break;
+      }
+    }
+
+    return SLoc;
+  }
+
   // Determine if a function needs exporting and add the export annotation as
   // required.
   void export_function_if_needed(const clang::FunctionDecl *FD) {
@@ -347,7 +380,11 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
         FD->getTemplatedKind() == clang::FunctionDecl::TK_NonTemplate
             ? FD->getBeginLoc()
             : FD->getInnerLocStart();
-    unexported_public_interface(FD)
+
+    if (!FD->attrs().empty())
+      SLoc = location_after_attributes(FD);
+
+    unexported_public_interface(FD, SLoc)
         << FD << clang::FixItHint::CreateInsertion(SLoc, export_macro + " ");
   }
 
@@ -399,7 +436,23 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
       return;
 
     clang::SourceLocation SLoc = VD->getBeginLoc();
-    unexported_public_interface(VD)
+
+    if (!VD->attrs().empty()) {
+      // Insert after any existing attributes.
+      SLoc = location_after_attributes(VD);
+
+    } else if (VD->hasExternalStorage()) {
+      // Insert the attribute after any "extern" keyword.
+      auto LO = context_.getLangOpts();
+      SLoc = clang::Lexer::getLocForEndOfToken(SLoc, 0, source_manager_, LO);
+
+      // Insert the macro immediately preceeding the next token that follows
+      // extern.
+      if (auto NextTok = clang::Lexer::findNextToken(SLoc, source_manager_, LO))
+        SLoc = NextTok->getLocation();
+    }
+
+    unexported_public_interface(VD, SLoc)
         << VD << clang::FixItHint::CreateInsertion(SLoc, export_macro + " ");
   }
 
