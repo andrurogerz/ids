@@ -14,33 +14,33 @@
 #define EXPORT_ABI __attribute__((visibility("default")))
 #endif
 
-// CHECK: Negative.hh:[[@LINE+1]]:1: remark: incorrectly exported symbol 'function'
+// CHECK: Negative.hh:[[@LINE+1]]:1: remark: improperly exported symbol 'function'
 EXPORT_ABI static inline void function() {}
 
 struct Struct {
-  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: incorrectly exported symbol 'staticMethod'
+  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: improperly exported symbol 'staticMethod'
   EXPORT_ABI static void staticMethod() {}
 
-  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: incorrectly exported symbol 'method'
+  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: improperly exported symbol 'method'
   EXPORT_ABI void method() {}
 
-  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: incorrectly exported symbol 'staticConstField'
+  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: improperly exported symbol 'staticConstField'
   EXPORT_ABI static const int staticConstField = 0;
 
-  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: incorrectly exported symbol 'staticConstexprField'
+  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: improperly exported symbol 'staticConstexprField'
   EXPORT_ABI static constexpr int staticConstexprField = 0;
 };
 
 struct EXPORT_ABI ExportedStruct {
-  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: incorrectly exported symbol 'staticMethod'
+  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: improperly exported symbol 'staticMethod'
   EXPORT_ABI static void staticMethod();
 
-  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: incorrectly exported symbol 'method'
+  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: improperly exported symbol 'method'
   EXPORT_ABI void method();
 
-  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: incorrectly exported symbol 'staticConstField'
+  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: improperly exported symbol 'staticConstField'
   EXPORT_ABI static const int staticConstField;
 
-  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: incorrectly exported symbol 'staticField'
+  // CHECK: Negative.hh:[[@LINE+1]]:3: remark: improperly exported symbol 'staticField'
   EXPORT_ABI static int staticField;
 };

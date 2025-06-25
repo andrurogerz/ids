@@ -152,7 +152,7 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
   clang::ASTContext &context_;
   clang::SourceManager &source_manager_;
   std::optional<unsigned> id_unexported_;
-  std::optional<unsigned> id_incorrect_;
+  std::optional<unsigned> id_improper_;
   std::optional<unsigned> id_exported_;
   PPCallbacks::FileIncludes &file_includes_;
 
@@ -230,15 +230,15 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
   }
 
   clang::DiagnosticBuilder
-  incorrectly_exported_interface(clang::SourceLocation location) {
+  improperly_exported_interface(clang::SourceLocation location) {
     clang::DiagnosticsEngine &diagnostics_engine = context_.getDiagnostics();
 
-    if (!id_incorrect_)
-      id_incorrect_ = diagnostics_engine.getCustomDiagID(
+    if (!id_improper_)
+      id_improper_ = diagnostics_engine.getCustomDiagID(
           clang::DiagnosticsEngine::Remark,
-          "incorrectly exported symbol %0: %1");
+          "improperly exported symbol %0: %1");
 
-    return diagnostics_engine.Report(location, *id_incorrect_);
+    return diagnostics_engine.Report(location, *id_improper_);
   }
 
   clang::DiagnosticBuilder
@@ -307,7 +307,7 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
   }
 
   template <typename Decl_>
-  void check_symbol_not_exported(const Decl_ *D, std::string context) {
+  void check_symbol_not_exported(const Decl_ *D, const std::string &message) {
     clang::SourceLocation SLoc;
     if (const auto *VA = D->template getAttr<clang::DLLExportAttr>())
       if (!VA->isInherited())
@@ -331,35 +331,37 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
     SLoc = source_manager_.getExpansionLoc(SLoc);
     clang::CharSourceRange macroRange =
         clang::CharSourceRange::getTokenRange(SLoc, SLoc);
-    incorrectly_exported_interface(SLoc)
-        << D << context << clang::FixItHint::CreateRemoval(macroRange);
+    improperly_exported_interface(SLoc)
+        << D << message << clang::FixItHint::CreateRemoval(macroRange);
   }
 
   // Determine if a function needs exporting and add the export annotation as
   // required.
   void export_function_if_needed(const clang::FunctionDecl *FD) {
-    // Skip functions contained in classes that are already exported.
-    if (is_containing_record_exported(FD)) {
-      check_symbol_not_exported(FD, "the containing class is exported");
-      return;
-    }
-
-    // If the function has a body, it can be materialized by the user.
-    if (FD->hasBody()) {
-      check_symbol_not_exported(FD, "the function declaration has a body");
-      return;
-    }
-
-    // Check if the symbol is already exported.
-    if (is_symbol_exported(FD))
+    // Skip declarations not in header files.
+    if (!is_in_header(FD))
       return;
 
     // Ignore declarations from the system.
     if (is_in_system_header(FD))
       return;
 
-    // Skip declarations not in header files.
-    if (!is_in_header(FD))
+    // Skip functions contained in classes that are already exported.
+    if (is_containing_record_exported(FD)) {
+      // Exporting a symbol contained in an already exported record will fail
+      // compilation on Windows.
+      check_symbol_not_exported(FD, "containing class is exported");
+      return;
+    }
+
+    // If the function has a body, it can be materialized by the user.
+    if (FD->hasBody()) {
+      check_symbol_not_exported(FD, "function declaration has a body");
+      return;
+    }
+
+    // Check if the symbol is already exported.
+    if (is_symbol_exported(FD))
       return;
 
     // We are only interested in non-dependent types.
@@ -408,13 +410,13 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
   void export_variable_if_needed(const clang::VarDecl *VD) {
     // Skip variables contained in classes that are already exported.
     if (is_containing_record_exported(VD)) {
-      check_symbol_not_exported(VD, "the containing class is already exported");
+      check_symbol_not_exported(VD, "containing class is exported");
       return;
     }
 
     // Skip static fields that have initializers.
     if (VD->hasInit()) {
-      check_symbol_not_exported(VD, "variable is initialized at declaration");
+      check_symbol_not_exported(VD, "variable initialized at declaration");
       return;
     }
 
