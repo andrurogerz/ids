@@ -152,6 +152,7 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
   clang::ASTContext &context_;
   clang::SourceManager &source_manager_;
   std::optional<unsigned> id_unexported_;
+  std::optional<unsigned> id_incorrect_;
   std::optional<unsigned> id_exported_;
   PPCallbacks::FileIncludes &file_includes_;
 
@@ -229,6 +230,18 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
   }
 
   clang::DiagnosticBuilder
+  incorrectly_exported_interface(clang::SourceLocation location) {
+    clang::DiagnosticsEngine &diagnostics_engine = context_.getDiagnostics();
+
+    if (!id_incorrect_)
+      id_incorrect_ = diagnostics_engine.getCustomDiagID(
+          clang::DiagnosticsEngine::Remark,
+          "incorrectly exported symbol %0: %1");
+
+    return diagnostics_engine.Report(location, *id_incorrect_);
+  }
+
+  clang::DiagnosticBuilder
   exported_private_interface(clang::SourceLocation location) {
     clang::DiagnosticsEngine &diagnostics_engine = context_.getDiagnostics();
 
@@ -280,9 +293,11 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
     if (const auto *VA = D->template getAttr<clang::VisibilityAttr>())
       return VA->getVisibility() == clang::VisibilityAttr::VisibilityType::Default;
 
-    if (llvm::isa<clang::RecordDecl>(D))
-      return false;
+    return false;
+  }
 
+  template <typename Decl_>
+  bool is_containing_record_exported(const Decl_ *D) const {
     // For non-record declarations, the DeclContext is the containing record.
     for (const clang::DeclContext *DC = D->getDeclContext(); DC; DC = DC->getParent())
       if (const auto *RD = llvm::dyn_cast<clang::RecordDecl>(DC))
@@ -291,9 +306,50 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
     return false;
   }
 
+  template <typename Decl_>
+  void check_symbol_not_exported(const Decl_ *D, std::string context) {
+    clang::SourceLocation SLoc;
+    if (const auto *VA = D->template getAttr<clang::DLLExportAttr>())
+      if (!VA->isInherited())
+        SLoc = VA->getLocation();
+
+    if (const auto *VA = D->template getAttr<clang::DLLImportAttr>())
+      if (!VA->isInherited())
+        SLoc = VA->getLocation();
+
+    if (const auto *VA = D->template getAttr<clang::VisibilityAttr>())
+      if (!VA->isInherited() &&
+          VA->getVisibility() == clang::VisibilityAttr::VisibilityType::Default)
+        SLoc = VA->getLocation();
+
+    if (SLoc.isInvalid())
+      return;
+
+    if (!SLoc.isMacroID())
+      return;
+
+    SLoc = source_manager_.getExpansionLoc(SLoc);
+    clang::CharSourceRange macroRange =
+        clang::CharSourceRange::getTokenRange(SLoc, SLoc);
+    incorrectly_exported_interface(SLoc)
+        << D << context << clang::FixItHint::CreateRemoval(macroRange);
+  }
+
   // Determine if a function needs exporting and add the export annotation as
   // required.
   void export_function_if_needed(const clang::FunctionDecl *FD) {
+    // Skip functions contained in classes that are already exported.
+    if (is_containing_record_exported(FD)) {
+      check_symbol_not_exported(FD, "the containing class is exported");
+      return;
+    }
+
+    // If the function has a body, it can be materialized by the user.
+    if (FD->hasBody()) {
+      check_symbol_not_exported(FD, "the function declaration has a body");
+      return;
+    }
+
     // Check if the symbol is already exported.
     if (is_symbol_exported(FD))
       return;
@@ -308,10 +364,6 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
 
     // We are only interested in non-dependent types.
     if (FD->isDependentContext())
-      return;
-
-    // If the function has a body, it can be materialized by the user.
-    if (FD->hasBody())
       return;
 
     // Skip methods in template declarations.
@@ -354,6 +406,18 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
   // Determine if a variable needs exporting and add the export annotation as
   // required. This only applies to extern globals and static member fields.
   void export_variable_if_needed(const clang::VarDecl *VD) {
+    // Skip variables contained in classes that are already exported.
+    if (is_containing_record_exported(VD)) {
+      check_symbol_not_exported(VD, "the containing class is already exported");
+      return;
+    }
+
+    // Skip static fields that have initializers.
+    if (VD->hasInit()) {
+      check_symbol_not_exported(VD, "variable is initialized at declaration");
+      return;
+    }
+
     // Check if the symbol is already exported.
     if (is_symbol_exported(VD))
       return;
@@ -368,10 +432,6 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
 
     // Skip local variables. We are only interested in static fields.
     if (VD->getParentFunctionOrMethod())
-      return;
-
-    // Skip static fields that have initializers.
-    if (VD->hasInit())
       return;
 
     // Skip all other local and global variables unless they are extern.
