@@ -306,6 +306,8 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
     return false;
   }
 
+  // Emit a FixIt if a symbol is annotated with a default visibility or DLL
+  // export/import annotation. The FixIt will remove the annotation
   template <typename Decl_>
   void check_symbol_not_exported(const Decl_ *D, const std::string &message) {
     clang::SourceLocation SLoc;
@@ -325,25 +327,36 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
     if (SLoc.isInvalid())
       return;
 
-    if (!SLoc.isMacroID())
-      return;
+    if (SLoc.isMacroID())
+      SLoc = source_manager_.getExpansionLoc(SLoc);
 
-    SLoc = source_manager_.getExpansionLoc(SLoc);
-    clang::CharSourceRange macroRange =
+    clang::CharSourceRange range =
         clang::CharSourceRange::getTokenRange(SLoc, SLoc);
     improperly_exported_interface(SLoc)
-        << D << message << clang::FixItHint::CreateRemoval(macroRange);
+        << D << message << clang::FixItHint::CreateRemoval(range);
   }
 
   // Determine if a function needs exporting and add the export annotation as
   // required.
   void export_function_if_needed(const clang::FunctionDecl *FD) {
+    // Ignore declarations from the system.
+    if (is_in_system_header(FD))
+      return;
+
     // Skip declarations not in header files.
     if (!is_in_header(FD))
       return;
 
-    // Ignore declarations from the system.
-    if (is_in_system_header(FD))
+    // Ignore friend declarations.
+    if (FD->getFriendObjectKind() != clang::Decl::FOK_None)
+      return;
+
+    // Ignore known forward declarations (builtins)
+    if (contains(kIgnoredBuiltins, FD->getNameAsString()))
+      return;
+
+    // TODO(compnerd) replace with std::set::contains in C++20
+    if (contains(get_ignored_symbols(), FD->getNameAsString()))
       return;
 
     // Skip functions contained in classes that are already exported.
@@ -354,14 +367,20 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
       return;
     }
 
-    // If the function has a body, it can be materialized by the user.
-    if (FD->hasBody()) {
-      check_symbol_not_exported(FD, "function declaration has a body");
+    if (FD->isThisDeclarationADefinition()) {
+      check_symbol_not_exported(FD, "function is defined inline");
       return;
     }
 
-    // Check if the symbol is already exported.
-    if (is_symbol_exported(FD))
+    // Pure virtual methods cannot be exported.
+    if (const auto *MD = llvm::dyn_cast<clang::CXXMethodDecl>(FD))
+      if (MD->isPureVirtual()) {
+        check_symbol_not_exported(FD, "pure virtual method");
+        return;
+      }
+
+    // Ignore deleted and defaulted functions (e.g. operators).
+    if (FD->isDeleted() || FD->isDefaulted())
       return;
 
     // We are only interested in non-dependent types.
@@ -372,29 +391,18 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
     if (FD->getTemplateInstantiationPattern())
       return;
 
-    // Ignore friend declarations.
-    if (FD->getFriendObjectKind() != clang::Decl::FOK_None)
-      return;
-
-    // Ignore deleted and defaulted functions (e.g. operators).
-    if (FD->isDeleted() || FD->isDefaulted())
-      return;
-
     // Skip template class template argument deductions.
     if (llvm::isa<clang::CXXDeductionGuideDecl>(FD))
       return;
 
-    // Pure virtual methods cannot be exported.
-    if (const auto *MD = llvm::dyn_cast<clang::CXXMethodDecl>(FD))
-      if (MD->isPureVirtual())
-        return;
-
-    // Ignore known forward declarations (builtins)
-    if (contains(kIgnoredBuiltins, FD->getNameAsString()))
+    // If the function has a body, it can be materialized by the user. This
+    // check is distinct from isThisDeclarationADefinition() because it will
+    // return true if the function has a body anywhere in the translation unit.
+    if (FD->hasBody())
       return;
 
-    // TODO(compnerd) replace with std::set::contains in C++20
-    if (contains(get_ignored_symbols(), FD->getNameAsString()))
+    // Check if the symbol is already exported.
+    if (is_symbol_exported(FD))
       return;
 
     clang::SourceLocation SLoc =
@@ -408,22 +416,6 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
   // Determine if a variable needs exporting and add the export annotation as
   // required. This only applies to extern globals and static member fields.
   void export_variable_if_needed(const clang::VarDecl *VD) {
-    // Skip variables contained in classes that are already exported.
-    if (is_containing_record_exported(VD)) {
-      check_symbol_not_exported(VD, "containing class is exported");
-      return;
-    }
-
-    // Skip static fields that have initializers.
-    if (VD->hasInit()) {
-      check_symbol_not_exported(VD, "variable initialized at declaration");
-      return;
-    }
-
-    // Check if the symbol is already exported.
-    if (is_symbol_exported(VD))
-      return;
-
     // Ignore declarations from the system.
     if (is_in_system_header(VD))
       return;
@@ -441,9 +433,21 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
           VD->getStorageClass() == clang::StorageClass::SC_Extern))
       return;
 
-    // Skip fields in template declarations.
-    if (VD->getTemplateInstantiationPattern() != nullptr)
+    // TODO(compnerd) replace with std::set::contains in C++20
+    if (contains(get_ignored_symbols(), VD->getNameAsString()))
       return;
+
+    // Skip variables contained in classes that are already exported.
+    if (is_containing_record_exported(VD)) {
+      check_symbol_not_exported(VD, "containing class is exported");
+      return;
+    }
+
+    // Skip static fields that have initializers.
+    if (VD->hasInit()) {
+      check_symbol_not_exported(VD, "variable initialized at declaration");
+      return;
+    }
 
     // Skip static variables declared in template class unless the template is
     // fully specialized.
@@ -456,8 +460,12 @@ class visitor : public clang::RecursiveASTVisitor<visitor> {
           return;
     }
 
-    // TODO(compnerd) replace with std::set::contains in C++20
-    if (contains(get_ignored_symbols(), VD->getNameAsString()))
+    // Skip fields in template declarations.
+    if (VD->getTemplateInstantiationPattern() != nullptr)
+      return;
+
+    // Check if the symbol is already exported.
+    if (is_symbol_exported(VD))
       return;
 
     clang::SourceLocation SLoc = VD->getBeginLoc();
