@@ -59,7 +59,6 @@ jobs:
               -D CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}                         \
               -D CMAKE_C_COMPILER=${{ github.workspace }}/third_party/bin/clang \
               -D CMAKE_CXX_COMPILER=${{ github.workspace }}/third_party/bin/clang++ \
-              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld                            \
               -D LLVM_DIR=${{ github.workspace }}/third_party/lib/cmake/llvm    \
               -D Clang_DIR=${{ github.workspace }}/third_party/lib/cmake/clang  \
               -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck \
@@ -130,7 +129,6 @@ jobs:
               -D Clang_DIR=${{ github.workspace }}/build/llvm-project/lib/cmake/clang                   `
               -D FILECHECK_EXECUTABLE=${{ github.workspace }}/build/llvm-project/bin/FileCheck          `
               -D LIT_EXECUTABLE=${{ github.workspace }}/third_party/llvm-project/llvm/utils/lit/lit.py  `
-              -D CMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld                                                    `
               -G Ninja
 
     - name: Build IDS
